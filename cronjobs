@@ -1,0 +1,2 @@
+0 * * * * /usr/bin/python3 /main.py --weatheronly
+30 8 * * * /usr/bin/python3 /main.py
