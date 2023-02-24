@@ -41,7 +41,7 @@ DPS = {
     "101": 0,    # air temperature
     "102": 0,    # soil moisture
     "103": 4,    # amount of water used last time
-    "105": "2",
+    "105": "2",  # Battery level - 2=full, 1=half, 0=empty
     "106": "1",   # 1 when runs water, 0 when stopped, 3 when stoped and time/rain delay active
     "107": 4,     # minutes set for manual run, up to 60 (starts with 108)
     "108": False, # starts manual countdown when False
