@@ -49,14 +49,17 @@ def store_weather():
 
 def run_routine(routine):
     schedules = routine["shedules"]
+    battery_alerted = False
     for schedule in schedules:
         sleep_seconds = schedule["delay"] * 60  # Config in mins
         logging.info(f"Running, then sleeping for {sleep_seconds} seconds")
         if routine.get("use_hub", False):
-            start_sprinkler(schedule["CID"], schedule["id"], routine["hub_ip"], routine["hub_id"], routine["hub_key"])
+            start_sprinkler(schedule["CID"], routine["hub_ip"], routine["hub_id"], routine["hub_key"])
+            battery_alerted = alert_battery(schedule["CID"], routine["hub_ip"], routine["hub_id"], routine["hub_key"], battery_alerted)
             time.sleep(sleep_seconds)
         else:
-            start_sprinkler(None, schedule["id"], schedule["ip"], schedule["id"], schedule["key"])
+            start_sprinkler(None, schedule["ip"], schedule["id"], schedule["key"])
+            battery_alerted = alert_battery(None, schedule["ip"], schedule["id"], schedule["key"], battery_alerted)
             time.sleep(sleep_seconds)
 
 
@@ -120,6 +123,36 @@ def start_sprinkler(cid, num, ip, id, key):
     else:
         logging.info(f"Running {args}")
         subprocess.call(args)
+
+
+def is_battery_empty(cid, ip, id, key):
+    os.environ["DEBUG"] = "*"
+    args = ["tuya-cli", "get", "--ip", ip, "--id", id, "--key", key, "--dps", "105", "--protocol-version", "3.3"]  # False is start
+    if cid:
+        args += ["--cid", cid]
+    if DEBUG:
+        logging.info(f"Not actually Running {args}")
+    else:
+        logging.info(f"Running {args}")
+        result = subprocess.check_output(args).strip()  # Returns b'2\n'
+        return int(result)  # Convert bytes to int
+    return 2
+
+
+def alert_battery(cid, ip, id, key, previous_alert):
+    level = is_battery_empty(cid, ip, id, key)
+    if level == 0:
+        logging.warning(f"Battery is low {level}) for device {cid}")
+        if not previous_alert:
+            previous_alert = True
+            logging.error(f"ALERT - Battery is low {level}) for device {cid}")
+    elif level == 1:
+        logging.warning(f"Battery is medium {level}) for device {cid}")
+    elif level == 2:
+        logging.warning(f"Battery is full ({level}) for device {cid}")
+    else:
+        raise Exception(f"Unexpected battery level of {level}")
+    return previous_alert
 
 
 if __name__ == "__main__":
