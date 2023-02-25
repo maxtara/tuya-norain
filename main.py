@@ -8,7 +8,7 @@ import time
 import os
 import glob
 import logging
-
+import requests
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s")
 
 APIKEY = os.environ["WEATHER_API_KEY"]
@@ -29,6 +29,11 @@ routine_dummy = {
 ROUTINE = os.environ.get("WEATHER_ROUTINE", json.dumps(routine_dummy))
 ROUTINE = json.loads(ROUTINE)
 
+CID_TO_FRIENDLY = {"cid1": "device1"}
+CID_TO_FRIENDLY = os.environ.get("CID_TO_FRIENDLY", json.dumps(CID_TO_FRIENDLY))
+CID_TO_FRIENDLY = json.loads(CID_TO_FRIENDLY)
+NOTIFY_DOMAIN = os.environ.get("NOTIFY_DOMAIN", "http://localhost")
+NOTIFY_TOKEN = os.environ.get("NOTIFY_TOKEN", "token")
 
 def delete_very_old_data():
     old = NOW - datetime.timedelta(days=65)
@@ -51,17 +56,21 @@ def run_routine(routine):
     schedules = routine["shedules"]
     battery_alerted = False
     for schedule in schedules:
-        sleep_seconds = schedule["delay"] * 60  # Config in mins
-        logging.info(f"Running, then sleeping for {sleep_seconds} seconds")
-        if routine.get("use_hub", False):
-            start_sprinkler(schedule["CID"], routine["hub_ip"], routine["hub_id"], routine["hub_key"])
-            battery_alerted = alert_battery(schedule["CID"], routine["hub_ip"], routine["hub_id"], routine["hub_key"], battery_alerted)
-            time.sleep(sleep_seconds)
-        else:
-            start_sprinkler(None, schedule["ip"], schedule["id"], schedule["key"])
-            battery_alerted = alert_battery(None, schedule["ip"], schedule["id"], schedule["key"], battery_alerted)
-            time.sleep(sleep_seconds)
-
+        try:
+            sleep_seconds = schedule["delay"] * 60  # Config in mins
+            if DEBUG:
+                sleep_seconds = 0
+            logging.info(f"Running, then sleeping for {sleep_seconds} seconds")
+            if routine.get("use_hub", False):
+                start_sprinkler(schedule["CID"], schedule["id"], routine["hub_ip"], routine["hub_id"], routine["hub_key"])
+                time.sleep(sleep_seconds)
+                battery_alerted = alert_battery(schedule["CID"], routine["hub_ip"], routine["hub_id"], routine["hub_key"], battery_alerted)
+            else:
+                start_sprinkler(None, schedule["id"], schedule["ip"], schedule["id"], schedule["key"])
+                time.sleep(sleep_seconds)
+                battery_alerted = alert_battery(None, schedule["ip"], schedule["id"], schedule["key"], battery_alerted)
+        except Exception as e:
+            logging.exception("Thrown exception, but going to continue schedule")
 
 def get_rain(obj):
     """get_rain - Sometimes 1h, sometimes 3h.
@@ -138,6 +147,15 @@ def is_battery_empty(cid, ip, id, key):
         return int(result)  # Convert bytes to int
     return 2
 
+def notify_post(cid):
+    body = {
+        "message": f"Battery is low for {CID_TO_FRIENDLY[cid]}",
+        "title": "Tuya Battery Low"
+    }
+    myurl = f"{NOTIFY_DOMAIN}/api/services/notify/notify"
+    resp = requests.post(myurl, headers={'Authorization': NOTIFY_TOKEN,'content-type': 'application/json'}, json=body)
+    resp.raise_for_status()
+
 
 def alert_battery(cid, ip, id, key, previous_alert):
     level = is_battery_empty(cid, ip, id, key)
@@ -146,6 +164,7 @@ def alert_battery(cid, ip, id, key, previous_alert):
         if not previous_alert:
             previous_alert = True
             logging.error(f"ALERT - Battery is low {level}) for device {cid}")
+            notify_post(cid)
     elif level == 1:
         logging.warning(f"Battery is medium {level}) for device {cid}")
     elif level == 2:
