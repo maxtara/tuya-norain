@@ -121,7 +121,6 @@ def too_wet_for_routine():
 
 
 def start_sprinkler(cid, num, ip, id, key):
-    os.environ["DEBUG"] = "*"
     dps = "108" if num == 0 else "155"
     args = ["tuya-cli", "set", "--ip", ip, "--id", id, "--key", key, "--dps", dps, "--set", "false", "--protocol-version", "3.3"]  # False is start
     if cid:
@@ -135,7 +134,6 @@ def start_sprinkler(cid, num, ip, id, key):
 
 
 def is_battery_empty(cid, ip, id, key):
-    os.environ["DEBUG"] = "*"
     args = ["tuya-cli", "get", "--ip", ip, "--id", id, "--key", key, "--dps", "105", "--protocol-version", "3.3"]  # False is start
     if cid:
         args += ["--cid", cid]
